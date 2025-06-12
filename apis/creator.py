@@ -1,12 +1,11 @@
 # encoding: utf-8
 import json
-import re
-import urllib
-import requests
-from xhs_utils.xhs_util import splice_str, generate_request_params, generate_x_b3_traceid, get_common_headers
-from loguru import logger
-import time
 from datetime import datetime, timedelta
+
+import requests
+from loguru import logger
+
+from xhs_utils.xhs_util import generate_request_params
 
 """
     获小红书的api

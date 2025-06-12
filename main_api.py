@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from apis.creator import Creator_Apis
 from apis.notion import NotionApi
-from apis.pc_apis import XHS_Apis
+from apis.xhs_pc_apis import XHS_Apis
 from proxy import read_proxies, get_working_proxy
 
 app = FastAPI()
