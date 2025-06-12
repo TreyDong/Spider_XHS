@@ -10,6 +10,39 @@ from loguru import logger
     获小红书的api
     :param cookies_str: 你的cookies
 """
+
+
+def extract_url(text):
+    # 正则表达式匹配小红书短链
+    pattern = r'http://xhslink\.com/\S+'
+    match = re.search(pattern, text)
+    if match:
+        return match.group(0)  # 返回匹配到的链接
+    else:
+        return "未找到链接"
+
+
+def get_redirect_url(short_url):
+    try:
+        # 添加请求头，模拟浏览器请求
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+        }
+        # 发送请求，禁止自动重定向
+        response = requests.get(short_url, headers=headers, allow_redirects=False)
+        # 检查响应状态码
+        if response.status_code in [301, 302, 307]:  # 处理重定向状态码
+            redirect_url = response.headers['Location']  # 获取重定向链接
+            return redirect_url
+        else:
+            return "无法获取重定向链接，状态码: {}".format(response.status_code)
+    except Exception as e:
+        return "请求失败: {}".format(str(e))
+
+
 class XHS_Apis():
     def __init__(self):
         self.base_url = "https://edith.xiaohongshu.com"
@@ -31,7 +64,8 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, res_json
 
-    def get_homefeed_recommend(self, category, cursor_score, refresh_type, note_index, cookies_str: str, proxies: dict = None):
+    def get_homefeed_recommend(self, category, cursor_score, refresh_type, note_index, cookies_str: str,
+                               proxies: dict = None):
         """
             获取主页推荐的笔记
             :param category: 你想要获取的频道
@@ -63,7 +97,8 @@ class XHS_Apis():
                 "need_filter_image": False
             }
             headers, cookies, trans_data = generate_request_params(cookies_str, api, data)
-            response = requests.post(self.base_url + api, headers=headers, data=trans_data, cookies=cookies, proxies=proxies)
+            response = requests.post(self.base_url + api, headers=headers, data=trans_data, cookies=cookies,
+                                     proxies=proxies)
             res_json = response.json()
             success, msg = res_json["success"], res_json["msg"]
         except Exception as e:
@@ -83,7 +118,8 @@ class XHS_Apis():
         note_list = []
         try:
             while True:
-                success, msg, res_json = self.get_homefeed_recommend(category, cursor_score, refresh_type, note_index, cookies_str, proxies)
+                success, msg, res_json = self.get_homefeed_recommend(category, cursor_score, refresh_type, note_index,
+                                                                     cookies_str, proxies)
                 if not success:
                     raise Exception(msg)
                 if "items" not in res_json["data"]:
@@ -143,7 +179,6 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, res_json
 
-
     def get_user_self_info2(self, cookies_str: str, proxies: dict = None):
         """
             获取用户自己的信息2
@@ -162,7 +197,8 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, res_json
 
-    def get_user_note_info(self, user_id: str, cursor: str, cookies_str: str, xsec_token='', xsec_source='', proxies: dict = None):
+    def get_user_note_info(self, user_id: str, cursor: str, cookies_str: str, xsec_token='', xsec_source='',
+                           proxies: dict = None):
         """
             获取用户指定位置的笔记
             :param user_id: 你想要获取的用户的id
@@ -191,10 +227,10 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, res_json
 
-
     def get_user_all_notes(self, user_url: str, cookies_str: str, proxies: dict = None):
         """
            获取用户所有笔记
+           :param user_url:
            :param user_id: 你想要获取的用户的id
            :param cookies_str: 你的cookies
            返回用户的所有笔记
@@ -209,7 +245,8 @@ class XHS_Apis():
             xsec_token = kvDist['xsec_token'] if 'xsec_token' in kvDist else ""
             xsec_source = kvDist['xsec_source'] if 'xsec_source' in kvDist else "pc_search"
             while True:
-                success, msg, res_json = self.get_user_note_info(user_id, cursor, cookies_str, xsec_token, xsec_source, proxies)
+                success, msg, res_json = self.get_user_note_info(user_id, cursor, cookies_str, xsec_token, xsec_source,
+                                                                 proxies)
                 if not success:
                     raise Exception(msg)
                 notes = res_json["data"]["notes"]
@@ -225,7 +262,8 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, note_list
 
-    def get_user_like_note_info(self, user_id: str, cursor: str, cookies_str: str, xsec_token='', xsec_source='', proxies: dict = None):
+    def get_user_like_note_info(self, user_id: str, cursor: str, cookies_str: str, xsec_token='', xsec_source='',
+                                proxies: dict = None):
         """
             获取用户指定位置喜欢的笔记
             :param user_id: 你想要获取的用户的id
@@ -288,7 +326,8 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, note_list
 
-    def get_user_collect_note_info(self, user_id: str, cursor: str, cookies_str: str, xsec_token='', xsec_source='', proxies: dict = None):
+    def get_user_collect_note_info(self, user_id: str, cursor: str, cookies_str: str, xsec_token='', xsec_source='',
+                                   proxies: dict = None):
         """
             获取用户指定位置收藏的笔记
             :param user_id: 你想要获取的用户的id
@@ -354,13 +393,17 @@ class XHS_Apis():
     def get_note_info(self, url: str, cookies_str: str, proxies: dict = None):
         """
             获取笔记的详细
+            :param proxies:
             :param url: 你想要获取的笔记的url
             :param cookies_str: 你的cookies
-            :param xsec_source: 你的xsec_source 默认为pc_search pc_user pc_feed
             返回笔记的详细
         """
+
         res_json = None
         try:
+            if "笔记" in url:
+                url = extract_url(url)
+                url = get_redirect_url(url)
             urlParse = urllib.parse.urlparse(url)
             note_id = urlParse.path.split("/")[-1]
             kvs = urlParse.query.split('&')
@@ -381,13 +424,16 @@ class XHS_Apis():
             }
             headers, cookies, data = generate_request_params(cookies_str, api, data)
             response = requests.post(self.base_url + api, headers=headers, data=data, cookies=cookies, proxies=proxies)
-            res_json = response.json()
-            success, msg = res_json["success"], res_json["msg"]
+            if response.status_code == 200:
+                res_json = response.json()
+                success, msg = res_json["success"], res_json["msg"]
+            else:
+                success = False
+                msg = "请求失败，状态码: {}".format(response.status_code)
         except Exception as e:
             success = False
             msg = str(e)
         return success, msg, res_json
-
 
     def get_search_keyword(self, word: str, cookies_str: str, proxies: dict = None):
         """
@@ -440,7 +486,8 @@ class XHS_Apis():
                 ]
             }
             headers, cookies, data = generate_request_params(cookies_str, api, data)
-            response = requests.post(self.base_url + api, headers=headers, data=data.encode('utf-8'), cookies=cookies, proxies=proxies)
+            response = requests.post(self.base_url + api, headers=headers, data=data.encode('utf-8'), cookies=cookies,
+                                     proxies=proxies)
             res_json = response.json()
             success, msg = res_json["success"], res_json["msg"]
         except Exception as e:
@@ -448,7 +495,8 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, res_json
 
-    def search_some_note(self, query: str, require_num: int, cookies_str: str, sort="general", note_type=0, proxies: dict = None):
+    def search_some_note(self, query: str, require_num: int, cookies_str: str, sort="general", note_type=0,
+                         proxies: dict = None):
         """
             指定数量搜索笔记，设置排序方式和笔记类型和笔记数量
             :param query 搜索的关键词
@@ -501,7 +549,8 @@ class XHS_Apis():
                 }
             }
             headers, cookies, data = generate_request_params(cookies_str, api, data)
-            response = requests.post(self.base_url + api, headers=headers, data=data.encode('utf-8'), cookies=cookies, proxies=proxies)
+            response = requests.post(self.base_url + api, headers=headers, data=data.encode('utf-8'), cookies=cookies,
+                                     proxies=proxies)
             res_json = response.json()
             success, msg = res_json["success"], res_json["msg"]
         except Exception as e:
@@ -593,7 +642,8 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, note_out_comment_list
 
-    def get_note_inner_comment(self, comment: dict, cursor: str, xsec_token: str, cookies_str: str, proxies: dict = None):
+    def get_note_inner_comment(self, comment: dict, cursor: str, xsec_token: str, cookies_str: str,
+                               proxies: dict = None):
         """
             获取指定位置的笔记二级评论
             :param comment 笔记的一级评论
@@ -666,11 +716,13 @@ class XHS_Apis():
             note_id = urlParse.path.split("/")[-1]
             kvs = urlParse.query.split('&')
             kvDist = {kv.split('=')[0]: kv.split('=')[1] for kv in kvs}
-            success, msg, out_comment_list = self.get_note_all_out_comment(note_id, kvDist['xsec_token'], cookies_str, proxies)
+            success, msg, out_comment_list = self.get_note_all_out_comment(note_id, kvDist['xsec_token'], cookies_str,
+                                                                           proxies)
             if not success:
                 raise Exception(msg)
             for comment in out_comment_list:
-                success, msg, new_comment = self.get_note_all_inner_comment(comment, kvDist['xsec_token'], cookies_str, proxies)
+                success, msg, new_comment = self.get_note_all_inner_comment(comment, kvDist['xsec_token'], cookies_str,
+                                                                            proxies)
                 if not success:
                     raise Exception(msg)
         except Exception as e:
@@ -867,7 +919,6 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, video_addr
 
-
     @staticmethod
     def get_note_no_water_img(img_url):
         """
@@ -904,40 +955,41 @@ class XHS_Apis():
             msg = str(e)
         return success, msg, new_url
 
+
 if __name__ == '__main__':
     """
         此文件为小红书api的使用示例
         所有涉及数据爬取的api都在此文件中
         数据注入的api违规请勿尝试
     """
-    xhs_apis = XHS_Apis()
-    cookies_str = r''
-    # 获取用户信息
-    user_url = 'https://www.xiaohongshu.com/user/profile/67a332a2000000000d008358?xsec_token=ABTf9yz4cLHhTycIlksF0jOi1yIZgfcaQ6IXNNGdKJ8xg=&xsec_source=pc_feed'
-    success, msg, user_info = xhs_apis.get_user_info('67a332a2000000000d008358', cookies_str)
-    logger.info(f'获取用户信息结果 {json.dumps(user_info, ensure_ascii=False)}: {success}, msg: {msg}')
-    success, msg, note_list = xhs_apis.get_user_all_notes(user_url, cookies_str)
-    logger.info(f'获取用户所有笔记结果 {json.dumps(note_list, ensure_ascii=False)}: {success}, msg: {msg}')
-    # 获取笔记信息
-    note_url = r'https://www.xiaohongshu.com/explore/67d7c713000000000900e391?xsec_token=AB1ACxbo5cevHxV_bWibTmK8R1DDz0NnAW1PbFZLABXtE=&xsec_source=pc_user'
-    success, msg, note_info = xhs_apis.get_note_info(note_url, cookies_str)
-    logger.info(f'获取笔记信息结果 {json.dumps(note_info, ensure_ascii=False)}: {success}, msg: {msg}')
-    # 获取搜索关键词
-    query = "榴莲"
-    success, msg, search_keyword = xhs_apis.get_search_keyword(query, cookies_str)
-    logger.info(f'获取搜索关键词结果 {json.dumps(search_keyword, ensure_ascii=False)}: {success}, msg: {msg}')
-    # 搜索笔记
-    query = "榴莲"
-    query_num = 10
-    sort = "general"
-    note_type = 0
-    success, msg, notes = xhs_apis.search_some_note(query, query_num, cookies_str, sort, note_type)
-    logger.info(f'搜索笔记结果 {json.dumps(notes, ensure_ascii=False)}: {success}, msg: {msg}')
-    # 获取笔记评论
-    note_url = r'https://www.xiaohongshu.com/explore/67d7c713000000000900e391?xsec_token=AB1ACxbo5cevHxV_bWibTmK8R1DDz0NnAW1PbFZLABXtE=&xsec_source=pc_user'
-    success, msg, note_all_comment = xhs_apis.get_note_all_comment(note_url, cookies_str)
-    logger.info(f'获取笔记评论结果 {json.dumps(note_all_comment, ensure_ascii=False)}: {success}, msg: {msg}')
-
-
-
-
+    short_url = extract_url(
+        "68 大张认知思维发布了一篇小红书笔记，快来看吧！ 😆 1VXOjFFtNOPKkHu 😆 http://xhslink.com/a/Dq3vIEui0creb，复制本条信息，打开【小红书】App查看精彩内容！")
+    full_url = get_redirect_url(short_url)
+    print(full_url)
+    # xhs_apis = XHS_Apis()
+    # cookies_str = r'abRequestId=22973d72-15cb-5702-80c8-a471293467c8; a1=19445ba38d63xf7quk41drjq42ccjgh6iqv0oxfds50000303805; webId=f6b4d664989c30e435f9ee109844c381; gid=yj442D04Y03Syj442D0qYACifKqCiWA7T4yfhfMFVA4JS828SVkxKl888q8qY828W0dqyd8W; customerClientId=952214275927397; x-user-id-creator.xiaohongshu.com=623e80890000000010005fd8; xsecappid=xhs-pc-web; webBuild=4.62.3; web_session=0400697766d1cc99bff61731193a4bf2fd2ef3; websectiga=984412fef754c018e472127b8effd174be8a5d51061c991aadd200c69a2801d6; sec_poison_id=68a68ba6-c204-494f-a3e2-63f476f8c593; loadts=1747879378227; unread={%22ub%22:%22682dd5eb0000000012007c53%22%2C%22ue%22:%22682bf0a2000000002300209d%22%2C%22uc%22:30}'
+    # # 获取用户信息
+    # user_url = 'https://www.xiaohongshu.com/user/profile/6807735a000000000a03e8d0'
+    # success, msg, user_info = xhs_apis.get_user_info('6807735a000000000a03e8d0', cookies_str)
+    # logger.info(f'获取用户信息结果 {json.dumps(user_info, ensure_ascii=False)}: {success}, msg: {msg}')
+    # success, msg, note_list = xhs_apis.get_user_all_notes(user_url, cookies_str)
+    # logger.info(f'获取用户所有笔记结果 {json.dumps(note_list, ensure_ascii=False)}: {success}, msg: {msg}')
+    # # 获取笔记信息
+    # note_url = r'https://www.xiaohongshu.com/explore/67d7c713000000000900e391?xsec_token=AB1ACxbo5cevHxV_bWibTmK8R1DDz0NnAW1PbFZLABXtE=&xsec_source=pc_user'
+    # success, msg, note_info = xhs_apis.get_note_info(note_url, cookies_str)
+    # logger.info(f'获取笔记信息结果 {json.dumps(note_info, ensure_ascii=False)}: {success}, msg: {msg}')
+    # # 获取搜索关键词
+    # query = "榴莲"
+    # success, msg, search_keyword = xhs_apis.get_search_keyword(query, cookies_str)
+    # logger.info(f'获取搜索关键词结果 {json.dumps(search_keyword, ensure_ascii=False)}: {success}, msg: {msg}')
+    # # 搜索笔记
+    # query = "榴莲"
+    # query_num = 10
+    # sort = "general"
+    # note_type = 0
+    # success, msg, notes = xhs_apis.search_some_note(query, query_num, cookies_str, sort, note_type)
+    # logger.info(f'搜索笔记结果 {json.dumps(notes, ensure_ascii=False)}: {success}, msg: {msg}')
+    # # 获取笔记评论
+    # note_url = r'https://www.xiaohongshu.com/explore/67d7c713000000000900e391?xsec_token=AB1ACxbo5cevHxV_bWibTmK8R1DDz0NnAW1PbFZLABXtE=&xsec_source=pc_user'
+    # success, msg, note_all_comment = xhs_apis.get_note_all_comment(note_url, cookies_str)
+    # logger.info(f'获取笔记评论结果 {json.dumps(note_all_comment, ensure_ascii=False)}: {success}, msg: {msg}')

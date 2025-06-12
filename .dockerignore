@@ -1,0 +1,8 @@
+### Example user template template
+### Example user template
+
+# IntelliJ project files
+node_modules  # 避免复制本地已安装的依赖
+__pycache__
+.env
+.git

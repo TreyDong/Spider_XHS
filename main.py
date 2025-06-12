@@ -116,13 +116,13 @@ if __name__ == '__main__':
     # save_choice: all: 保存所有的信息, media: 保存视频和图片, excel: 保存到excel
     # save_choice 为 excel 或者 all 时，excel_name 不能为空
     # 1
-    notes = [
-        r'https://www.xiaohongshu.com/explore/67d7c713000000000900e391?xsec_token=AB1ACxbo5cevHxV_bWibTmK8R1DDz0NnAW1PbFZLABXtE=&xsec_source=pc_user',
-    ]
-    data_spider.spider_some_note(notes, cookies_str, base_path, 'all', 'test')
+    # notes = [
+    #     r'https://www.xiaohongshu.com/explore/67d7c713000000000900e391?xsec_token=AB1ACxbo5cevHxV_bWibTmK8R1DDz0NnAW1PbFZLABXtE=&xsec_source=pc_user',
+    # ]
+    # data_spider.spider_some_note(notes, cookies_str, base_path, 'all', 'test')
 
     # 2
-    user_url = 'https://www.xiaohongshu.com/user/profile/67a332a2000000000d008358?xsec_token=ABTf9yz4cLHhTycIlksF0jOi1yIZgfcaQ6IXNNGdKJ8xg=&xsec_source=pc_feed'
+    user_url = 'https://www.xiaohongshu.com/user/profile/642f62b8000000001002b779'
     data_spider.spider_user_all_note(user_url, cookies_str, base_path, 'all')
 
     # 3
