@@ -10,6 +10,38 @@ from loguru import logger
     获小红书的api
     :param cookies_str: 你的cookies
 """
+
+
+def extract_url(text):
+    # 正则表达式匹配小红书短链
+    pattern = r'http://xhslink\.com/[a-zA-Z0-9/_.-]+'
+    match = re.search(pattern, text)
+    if match:
+        return match.group(0)  # 返回匹配到的链接
+    else:
+        return "未找到链接"
+
+
+def get_redirect_url(short_url):
+    try:
+        # 添加请求头，模拟浏览器请求
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+        }
+        # 发送请求，禁止自动重定向
+        response = requests.get(short_url, headers=headers, allow_redirects=False)
+        # 检查响应状态码
+        if response.status_code in [301, 302, 307]:  # 处理重定向状态码
+            redirect_url = response.headers['Location']  # 获取重定向链接
+            return redirect_url
+        else:
+            return "无法获取重定向链接，状态码: {}".format(response.status_code)
+    except Exception as e:
+        return "请求失败: {}".format(str(e))
+
 class XHS_Apis():
     def __init__(self):
         self.base_url = "https://edith.xiaohongshu.com"
@@ -360,6 +392,9 @@ class XHS_Apis():
             返回笔记的详细
         """
         res_json = None
+        if "笔记" in url:
+            orign_link = extract_url(url)
+            url = get_redirect_url(orign_link)
         try:
             urlParse = urllib.parse.urlparse(url)
             note_id = urlParse.path.split("/")[-1]

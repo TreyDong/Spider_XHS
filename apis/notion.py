@@ -1,16 +1,103 @@
 import concurrent.futures
 import json
 import time
+import uuid
 from datetime import datetime
-from typing import Optional, Tuple, List, Dict, Any
-from urllib.parse import urlparse, urlunparse
+from typing import Optional, Tuple, List, Dict
+from urllib.parse import urlparse, urlunparse, unquote
+
 import requests
 from notion_client import Client
 from notion_client.errors import APIResponseError
 
-from apis.pc_apis import XHS_Apis, extract_url, get_redirect_url
+from apis.xhs_pc_apis import XHS_Apis, extract_url, get_redirect_url
 
 
+import requests
+import tempfile
+import os
+
+def call_siliconflow_transcription_from_url(media_url, api_key, model_name="FunAudioLLM/SenseVoiceSmall"):
+    """
+    从URL下载视频/音频，并调用SiliconFlow的语音转录API。
+    强制将文件扩展名和MIME类型模拟为MP3，并传递模型名称。
+
+    Args:
+        media_url (str): 视频或音频的URL地址。
+        api_key (str): SiliconFlow API的Bearer Token。
+        model_name (str): 用于转录的模型名称。默认为 "FunAudioLLM/SenseVoiceSmall"。
+    """
+    api_endpoint = "https://api.siliconflow.cn/v1/audio/transcriptions"
+
+    print(f"正在从URL下载文件: {media_url}")
+    temp_file_path = None # 初始化，确保finally块中可以访问
+
+    try:
+        # 1. 下载原始文件到临时文件
+        response = requests.get(media_url, stream=True)
+        response.raise_for_status() # 检查下载请求是否成功
+
+        # 解析URL，获取路径部分，然后解码（处理%20等编码字符）
+        parsed_url = urlparse(media_url)
+        path_without_query = unquote(parsed_url.path) # 解码路径，去除URL编码
+
+        # 从不含查询参数的路径中提取文件扩展名
+        temp_original_extension = os.path.splitext(path_without_query)[1]
+        # 如果没有扩展名，给一个默认的 .tmp
+        if not temp_original_extension:
+            temp_original_extension = ".tmp"
+            print(f"警告：无法从URL {media_url} 识别文件扩展名，使用默认 .tmp")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=temp_original_extension) as temp_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                temp_file.write(chunk)
+            temp_file_path = temp_file.name
+
+        print(f"文件已下载到临时文件: {temp_file_path}")
+
+        # 2. 准备 API 请求参数
+        payload_data = {
+            'model': model_name
+        }
+
+        # 打开临时文件以二进制读取模式 ('rb')
+        with open(temp_file_path, 'rb') as file_content:
+            # 获取URL基础文件名，并将其扩展名强制改为 .mp3
+            original_filename = os.path.basename(media_url)
+            base_filename_without_ext = os.path.splitext(original_filename)[0]
+            # 为了确保唯一性，可以添加一个短的UUID字符串
+            spoofed_filename = f"{base_filename_without_ext}_{uuid.uuid4().hex[:8]}.mp3"
+
+            # 使用伪装的文件名和MP3的MIME类型
+            files = {
+                'file': (spoofed_filename, file_content, 'audio/mpeg')
+            }
+
+            # 3. 设置请求头（仅Authorization，其他requests会自动处理）
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+            }
+
+            print(f"正在调用API: {api_endpoint}，上传文件: {spoofed_filename}，使用模型: {model_name}")
+            # 4. 发送 POST 请求
+            api_response = requests.request("POST", api_endpoint, headers=headers, data=payload_data, files=files)
+            api_response.raise_for_status()
+
+
+            print("API调用成功！")
+            print("API响应:")
+            print(api_response.json())
+            if api_response.status_code == 200:
+                return api_response.json()
+
+    except requests.exceptions.RequestException as e:
+        print(f"请求发生错误: {e}")
+    except Exception as e:
+        print(f"发生未知错误: {e}")
+    finally:
+        # 确保删除临时文件
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+            print(f"临时文件已删除: {temp_file_path}")
 
 def _make_request_with_retry(
         method: str,
@@ -169,10 +256,12 @@ class NotionApi:
             self,
             notion_token: str,
             database_id: str,
-            cookies_str: str,
+            cookies_arr: List,
             note_url: str = "",
             remarks: str = "",
             custom_tags: str = "",
+            video_transfer: bool = False,
+            video_transfer_api_key: str = "",
             proxies: Optional[dict] = None,
     ) -> Tuple[bool, str, Optional[str]]:  # 修改返回类型
         # --- 1. 初始化客户端和基本校验 ---
@@ -187,17 +276,25 @@ class NotionApi:
         except Exception as e:
             return False, f"初始化Notion客户端失败: {e}", None
 
-        if not cookies_str:
+        if not cookies_arr:
             return False, "未设置Cookie", None
         xhs_apis = XHS_Apis()
-        success, msg, api_response = xhs_apis.get_note_info(note_url, cookies_str, proxies)
-        if not success:
-            return False, f"获取笔记信息失败: {msg}", None
+        api_response = None
+        for cookies_str in cookies_arr:
+            if not cookies_str:
+                continue
+            success, msg, api_response = xhs_apis.get_note_info(note_url, cookies_str, proxies)
+            if not success:
+                return False, f"获取笔记信息失败: {msg}", None
 
-        # 修改后的API响应检查
-        if not api_response.get("success") or not api_response.get("data", {}).get("items"):
-            return False, "API响应无效或不包含笔记项目", None
-
+            # 修改后的API响应检查
+            if not api_response.get("success") or not api_response.get("data", {}).get("items"):
+                api_response = None
+                continue
+            else:
+                break
+        if  api_response is None:
+            return False, "所有Cookie都无法获取到笔记信息", None
         # --- 2. 解析和提取数据 ---
         note_card = api_response["data"]["items"][0].get("note_card")
         if not note_card:
@@ -234,7 +331,8 @@ class NotionApi:
 
         cover_url = ""
         if image_list := note_card.get("image_list"):
-            cover_url = image_list[0].get("url_default", "")
+            cover_url = _generate_formatted_url(_extract_image_token(image_list[0].get("url_default")))
+
 
         note_tags = [{"name": tag["name"]} for tag in note_card.get("tag_list", [])]
 
@@ -242,6 +340,7 @@ class NotionApi:
         if note_card.get("type") == "video" and (video_data := note_card.get("video")):
             if h264_streams := video_data.get("media", {}).get("stream", {}).get("h264", []):
                 video_url = h264_streams[0].get("master_url", "")
+
 
         publish_date_iso = ""
         if publish_timestamp := note_card.get("time"):
@@ -305,7 +404,7 @@ class NotionApi:
                     except Exception as exc:
                         print(f"❌ 图片上传时产生严重异常: {original_url} -> {exc}")
                         results[original_url] = None
-
+            cover_url = results.get(image_urls_to_upload[0])
             for image in image_urls_to_upload:
                 if notion_image_url := results.get(image):
                     children_payload.append({
@@ -320,6 +419,24 @@ class NotionApi:
                     "url": video_url
                 }
             })
+            if video_transfer:
+                text = call_siliconflow_transcription_from_url(video_url,video_transfer_api_key).get("text","")
+                if text:
+                    rich_text_arr = []
+                    if "。" in text:
+                        rich_text_arr = [ {"type":"text","text":{"content":item}} for item in text.split("。") if item.strip()]
+                    elif "\n" in text:
+                        rich_text_arr = [ {"type":"text","text":{"content":item}} for item in text.split("\n") if item.strip()]
+                    elif len(text) > 2000:
+                        rich_text_arr = [{"type":"text","text":{"content":text[:2000]}} ,{"type":"text","text":{"content":text[2000:]}} ]
+                    children_payload.append({
+                        "object": "block",
+                        "type": "callout",
+                        "callout": {
+                            "rich_text": rich_text_arr,
+                            "icon": {"emoji": "📝"}
+                        }
+                    })
         # --- 优化结束 ---
 
         # --- 4. 调用Notion API创建页面并返回结果 ---
@@ -329,7 +446,7 @@ class NotionApi:
                     parent={"database_id": database_id},
                     properties=properties_payload,
                     children=children_payload if children_payload else None,
-                    cover={"type": "external", "external": {"url": cover_url}}
+                    cover={"type": "file_upload", "file_upload": {"id": cover_url}}
                 )
                 return True, "成功创建页面", new_page.get("url")
             else:

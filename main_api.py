@@ -1,5 +1,6 @@
 # encoding: utf-8
 from datetime import datetime
+from typing import List
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -244,15 +245,18 @@ def get_note_data_detail(request: NoteDataDetailRequest):
 class SaveToNotionRequest(BaseModel):
     notion_token: str
     database_id: str
-    cookies_str: str
+    cookies_arr: List[str]
     note_url: str = ""
     remarks: str = ""
     custom_tags: str = ""
+    video_transfer: bool = False
+    video_transfer_api_key: str = ""
     proxies: dict = None
 
 @app.post("/api/save_to_notion")
 def save_to_notion(request: SaveToNotionRequest):
-    return handle_api_call(notion_api.save_xiaohongshu_note_to_notion, request.notion_token, request.database_id,request.cookies_str,request.note_url,request.remarks,request.custom_tags,get_working_proxy(proxies_list))
+    return handle_api_call(notion_api.save_xiaohongshu_note_to_notion, request.notion_token, request.database_id,request.cookies_arr,request.note_url,request.remarks,
+                           request.custom_tags,request.video_transfer,request.video_transfer_api_key,get_working_proxy(proxies_list))
 
 if __name__ == "__main__":
     import uvicorn

@@ -63,7 +63,7 @@ def get_working_proxy(proxy_list=None):
 
     # 使用线程池并行验证代理
     with ThreadPoolExecutor(max_workers=10) as executor:
-        results = list(executor.map(check_proxy, proxy_list[:20]))  # 验证前20个代理
+        results = list(executor.map(check_proxy, proxy_list[:10]))  # 验证前20个代理
 
     # 过滤出有效的代理
     working_proxies = [p for p in results if p is not None]
