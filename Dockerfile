@@ -26,6 +26,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # =================================================================
 FROM python:3.10-slim AS final
 
+# ---- 安装系统级依赖 (FFmpeg 优化版) ----
+# 使用静态二进制文件来快速安装 FFmpeg。
+# 在同一个 RUN 指令中安装解压工具、下载、解压、然后清理，以保持镜像体积最小。
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends xz-utils ca-certificates wget && \
+    wget -q -O /tmp/ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz && \
+    tar -xf /tmp/ffmpeg.tar.xz -C /usr/local/bin --strip-components=1 --wildcards '*/ffmpeg' '*/ffprobe' && \
+    apt-get purge -y --auto-remove xz-utils wget && \
+    rm -rf /var/lib/apt/lists/* /tmp/ffmpeg.tar.xz
+
 WORKDIR /app
 
 # 设置环境变量，让系统和 execjs 能找到 Node.js 相关的模块和可执行文件

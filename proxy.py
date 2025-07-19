@@ -57,6 +57,7 @@ def check_proxy(proxy):
 def get_working_proxy(proxy_list=None):
     """获取一个有效的代理"""
     # 随机打乱代理列表
+    return None
     if proxy_list is None:
         proxy_list = read_proxies()
     random.shuffle(proxy_list)
