@@ -1,6 +1,7 @@
 # =================================================================
 # Stage 1: Node.js Builder - 安装 Node.js 依赖
 # =================================================================
+ARG APP_VERSION=dev
 FROM node:18-slim AS node-builder
 
 # 设置工作目录并拷贝 package.json
@@ -25,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Stage 3: Final Image - 构建最终运行镜像
 # =================================================================
 FROM python:3.10-slim AS final
+
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
 
 # ---- 安装系统级依赖 (FFmpeg 优化版) ----
 # 使用静态二进制文件来快速安装 FFmpeg。

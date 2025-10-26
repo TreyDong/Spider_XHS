@@ -1,4 +1,6 @@
 # encoding: utf-8
+import logging
+import os
 from datetime import datetime
 from typing import List
 
@@ -9,12 +11,21 @@ from apis.creator import Creator_Apis
 from apis.notion import NotionApi
 from apis.notion import call_siliconflow_transcription_from_url
 from apis.xhs_pc_apis import XHS_Apis
+from version import APP_VERSION as DEFAULT_APP_VERSION
 
 
 app = FastAPI()
 xhs_apis = XHS_Apis()
 creator_apis = Creator_Apis()
 notion_api = NotionApi()
+
+logger = logging.getLogger("uvicorn.error")
+runtime_version = os.getenv("APP_VERSION", DEFAULT_APP_VERSION)
+
+
+@app.on_event("startup")
+async def log_runtime_version():
+    logger.info("XHS Spider service starting, version: %s", runtime_version)
 
 def handle_api_call(func, *args, **kwargs):
     try:
