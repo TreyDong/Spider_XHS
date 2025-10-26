@@ -2,7 +2,7 @@
 # Stage 1: Node.js Builder - 安装 Node.js 依赖
 # =================================================================
 ARG APP_VERSION=dev
-FROM node:18-slim AS node-builder
+FROM --platform=linux/amd64 node:18-slim AS node-builder
 
 # 设置工作目录并拷贝 package.json
 WORKDIR /app/nodejs_runtime
@@ -15,7 +15,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 # =================================================================
 # Stage 2: Python Builder - 安装 Python 依赖
 # =================================================================
-FROM python:3.10-slim AS python-deps
+FROM --platform=linux/amd64 python:3.10-slim AS python-deps
 
 # 安装 Python 依赖
 WORKDIR /app
@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # =================================================================
 # Stage 3: Final Image - 构建最终运行镜像
 # =================================================================
-FROM python:3.10-slim AS final
+FROM --platform=linux/amd64 python:3.10-slim AS final
 
 ARG APP_VERSION
 ENV APP_VERSION=${APP_VERSION}
