@@ -193,10 +193,10 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
                         temp_original_extension = guessed_extension
                         logger.info(f"从Content-Type {content_type} 推断文件扩展名为 {guessed_extension}")
 
-                # 如果仍无法判断扩展名，使用 .tmp
+                # 如果仍无法判断扩展名，默认作为 MP4 处理
                 if not temp_original_extension:
-                    temp_original_extension = ".tmp"
-                    logger.warning(f"警告：无法从URL {media_url} 识别文件扩展名，使用默认 .tmp")
+                    temp_original_extension = ".mp4"
+                    logger.warning(f"警告：无法从URL {media_url} 识别文件扩展名，默认作为 MP4 处理")
 
                 temp_file_path = tempfile.mktemp(suffix=temp_original_extension)
                 # 异步下载文件
