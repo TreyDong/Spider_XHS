@@ -33,24 +33,28 @@ SEMAPHORE_VALUE = 3
 
 semaphore = asyncio.Semaphore(SEMAPHORE_VALUE)
 
-async def get_file_size(session, url):
-    """获取文件大小"""
+async def get_file_metadata(session, url):
+    """获取远程文件的基本信息（大小、类型）"""
     try:
         async with session.head(url) as response:
             response.raise_for_status()
             content_length = response.headers.get('Content-Length')
-            if content_length:
-                return int(content_length)
+            content_type = response.headers.get('Content-Type')
+            return (
+                int(content_length) if content_length else None,
+                content_type
+            )
     except Exception as e:
-        logger.error(f"获取文件大小失败: {url}, 错误: {e}")
-    return None
+        logger.error(f"获取文件信息失败: {url}, 错误: {e}")
+    return None, None
 
 async def download_file(session, url, temp_file_path):
-    """异步下载文件，并显示进度"""
+    """异步下载文件，并显示进度，返回响应的 Content-Type"""
     try:
         async with session.get(url) as response:
             response.raise_for_status()
             total_size = int(response.headers.get('Content-Length', 0))
+            content_type = response.headers.get('Content-Type')
             with open(temp_file_path, 'wb') as f:
                 with tqdm(
                     desc="下载文件",
@@ -70,6 +74,7 @@ async def download_file(session, url, temp_file_path):
                 logger.info(f"文件成功下载到: {temp_file_path}，文件大小: {os.path.getsize(temp_file_path)} 字节")
             else:
                 logger.error(f"文件下载可能未成功，路径 {temp_file_path} 下文件不存在或为空")
+            return content_type
     except Exception as e:
         logger.error(f"下载文件 {url} 到 {temp_file_path} 时出错: {e}")
         if os.path.exists(temp_file_path):
@@ -158,8 +163,8 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
     async with semaphore:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as session:
             try:
-                # 检查文件大小
-                file_size = await get_file_size(session, media_url)
+                # 检查文件大小并尝试获取内容类型
+                file_size, content_type = await get_file_metadata(session, media_url)
                 if file_size and file_size > MAX_FILE_SIZE:
                     logger.error(f"文件大小超过限制: {media_url}, 大小: {file_size} 字节")
                     return {
@@ -173,18 +178,54 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
 
                 # 从不含查询参数的路径中提取文件扩展名
                 temp_original_extension = os.path.splitext(path_without_query)[1]
-                # 如果没有扩展名，给一个默认的 .tmp
+                # 如果没有扩展名，尝试使用 Content-Type 推断
+                if not temp_original_extension and content_type:
+                    guessed_extension = None
+                    lowered_content_type = content_type.lower()
+                    if 'mp4' in lowered_content_type:
+                        guessed_extension = ".mp4"
+                    elif 'mpeg' in lowered_content_type or 'mp3' in lowered_content_type:
+                        guessed_extension = ".mp3"
+                    elif 'wav' in lowered_content_type:
+                        guessed_extension = ".wav"
+
+                    if guessed_extension:
+                        temp_original_extension = guessed_extension
+                        logger.info(f"从Content-Type {content_type} 推断文件扩展名为 {guessed_extension}")
+
+                # 如果仍无法判断扩展名，使用 .tmp
                 if not temp_original_extension:
                     temp_original_extension = ".tmp"
                     logger.warning(f"警告：无法从URL {media_url} 识别文件扩展名，使用默认 .tmp")
 
                 temp_file_path = tempfile.mktemp(suffix=temp_original_extension)
                 # 异步下载文件
-                await download_file(session, media_url, temp_file_path)
+                download_content_type = await download_file(session, media_url, temp_file_path)
+                if not content_type and download_content_type:
+                    content_type = download_content_type
                 logger.info(f"文件已下载到临时文件: {temp_file_path}")
 
+                # 判断是否需要提取音频（即使原始URL没有扩展名也要处理）
+                should_extract_audio = temp_original_extension.lower() == '.mp4'
+                if not should_extract_audio and content_type:
+                    if 'mp4' in content_type.lower():
+                        should_extract_audio = True
+                        logger.info(f"根据Content-Type {content_type} 将文件视为 MP4")
+
+                if not should_extract_audio:
+                    try:
+                        probe_info = ffmpeg.probe(temp_file_path)
+                        format_name = probe_info.get('format', {}).get('format_name', '') or ''
+                        if 'mp4' in format_name.lower():
+                            should_extract_audio = True
+                            logger.info("通过 ffprobe 探测到文件为 MP4 格式，将进行音频提取")
+                    except ffmpeg.Error as probe_error:
+                        logger.debug(f"ffprobe 探测文件格式失败: {probe_error}")
+                    except Exception as probe_unexpected:
+                        logger.debug(f"识别文件格式时出现未知错误: {probe_unexpected}")
+
                 # 若为MP4文件，提取音频
-                if temp_original_extension.lower() == '.mp4':
+                if should_extract_audio:
                     audio_file_path = tempfile.mktemp(suffix=".mp3")
                     if not extract_audio(temp_file_path, audio_file_path):
                         return {
@@ -641,5 +682,3 @@ if __name__ == "__main__":
             print(f"✅ 成功添加到Notion页面，链接为: {res}")
         else:
             print("请在 `if __name__ == '__main__':` 代码块中填入你的 Notion Token 和 Database ID。")
-
-
