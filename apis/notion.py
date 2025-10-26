@@ -198,6 +198,9 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
                     temp_original_extension = ".mp4"
                     logger.warning(f"警告：无法从URL {media_url} 识别文件扩展名，默认作为 MP4 处理")
 
+                # 如果没有扩展名，记录该状态用于后续判断
+                url_missing_extension = not os.path.splitext(path_without_query)[1]
+
                 temp_file_path = tempfile.mktemp(suffix=temp_original_extension)
                 # 异步下载文件
                 download_content_type = await download_file(session, media_url, temp_file_path)
@@ -205,24 +208,28 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
                     content_type = download_content_type
                 logger.info(f"文件已下载到临时文件: {temp_file_path}")
 
-                # 判断是否需要提取音频（即使原始URL没有扩展名也要处理）
-                should_extract_audio = temp_original_extension.lower() == '.mp4'
-                if not should_extract_audio and content_type:
-                    if 'mp4' in content_type.lower():
-                        should_extract_audio = True
-                        logger.info(f"根据Content-Type {content_type} 将文件视为 MP4")
+                # 使用多种信号判断是否需要提取音频
+                should_extract_audio = temp_original_extension.lower() == '.mp4' or url_missing_extension
+                video_hint = False
 
-                if not should_extract_audio:
-                    try:
-                        probe_info = ffmpeg.probe(temp_file_path)
-                        format_name = probe_info.get('format', {}).get('format_name', '') or ''
-                        if 'mp4' in format_name.lower():
-                            should_extract_audio = True
-                            logger.info("通过 ffprobe 探测到文件为 MP4 格式，将进行音频提取")
-                    except ffmpeg.Error as probe_error:
-                        logger.debug(f"ffprobe 探测文件格式失败: {probe_error}")
-                    except Exception as probe_unexpected:
-                        logger.debug(f"识别文件格式时出现未知错误: {probe_unexpected}")
+                if content_type and 'video' in content_type.lower():
+                    video_hint = True
+                    should_extract_audio = True
+                    logger.info(f"根据Content-Type {content_type} 检测到视频流，将提取音频")
+
+                probe_info = None
+                try:
+                    probe_info = ffmpeg.probe(temp_file_path)
+                    stream_types = {stream.get('codec_type') for stream in probe_info.get('streams', [])}
+                    if 'video' in stream_types:
+                        video_hint = True
+                        if not should_extract_audio:
+                            logger.info("通过 ffprobe 检测到视频流，将提取音频")
+                        should_extract_audio = True
+                except ffmpeg.Error as probe_error:
+                    logger.debug(f"ffprobe 探测文件格式失败: {probe_error}")
+                except Exception as probe_unexpected:
+                    logger.debug(f"识别文件格式时出现未知错误: {probe_unexpected}")
 
                 # 若为MP4文件，提取音频
                 if should_extract_audio:
