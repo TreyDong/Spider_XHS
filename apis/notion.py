@@ -33,6 +33,15 @@ SEMAPHORE_VALUE = 3
 
 semaphore = asyncio.Semaphore(SEMAPHORE_VALUE)
 
+
+def _create_temp_file(suffix: str) -> str:
+    """Return a named temporary file path with the desired suffix."""
+    if not suffix.startswith('.'):
+        suffix = f".{suffix}"
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    return path
+
 async def get_file_metadata(session, url):
     """获取远程文件的基本信息（大小、类型）"""
     try:
@@ -157,7 +166,6 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
     logger.info(f"正在从URL下载文件: {media_url}")
     temp_file_path = None
     audio_file_path = None
-    success = False
     msg = ""
 
     async with semaphore:
@@ -177,9 +185,10 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
                 path_without_query = unquote(parsed_url.path)  # 解码路径，去除URL编码
 
                 # 从不含查询参数的路径中提取文件扩展名
-                temp_original_extension = os.path.splitext(path_without_query)[1]
+                raw_extension = os.path.splitext(path_without_query)[1]
+
                 # 如果没有扩展名，尝试使用 Content-Type 推断
-                if not temp_original_extension and content_type:
+                if not raw_extension and content_type:
                     guessed_extension = None
                     lowered_content_type = content_type.lower()
                     if 'mp4' in lowered_content_type:
@@ -190,56 +199,70 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
                         guessed_extension = ".wav"
 
                     if guessed_extension:
-                        temp_original_extension = guessed_extension
+                        raw_extension = guessed_extension
                         logger.info(f"从Content-Type {content_type} 推断文件扩展名为 {guessed_extension}")
 
                 # 如果仍无法判断扩展名，默认作为 MP4 处理
-                if not temp_original_extension:
-                    temp_original_extension = ".mp4"
+                if not raw_extension:
+                    raw_extension = ".mp4"
                     logger.warning(f"警告：无法从URL {media_url} 识别文件扩展名，默认作为 MP4 处理")
 
                 # 如果没有扩展名，记录该状态用于后续判断
                 url_missing_extension = not os.path.splitext(path_without_query)[1]
 
-                temp_file_path = tempfile.mktemp(suffix=temp_original_extension)
+                temp_file_path = _create_temp_file(raw_extension)
                 # 异步下载文件
                 download_content_type = await download_file(session, media_url, temp_file_path)
                 if not content_type and download_content_type:
                     content_type = download_content_type
                 logger.info(f"文件已下载到临时文件: {temp_file_path}")
 
-                # 使用多种信号判断是否需要提取音频
-                should_extract_audio = temp_original_extension.lower() == '.mp4' or url_missing_extension
-                video_hint = False
+                container_extension = os.path.splitext(temp_file_path)[1].lower()
+                target_extension = ".mp3"
 
-                if content_type and 'video' in content_type.lower():
-                    video_hint = True
-                    should_extract_audio = True
-                    logger.info(f"根据Content-Type {content_type} 检测到视频流，将提取音频")
-
-                probe_info = None
+                has_video_stream = False
+                has_audio_stream = False
                 try:
                     probe_info = ffmpeg.probe(temp_file_path)
                     stream_types = {stream.get('codec_type') for stream in probe_info.get('streams', [])}
-                    if 'video' in stream_types:
-                        video_hint = True
-                        if not should_extract_audio:
-                            logger.info("通过 ffprobe 检测到视频流，将提取音频")
-                        should_extract_audio = True
+                    has_video_stream = 'video' in stream_types
+                    has_audio_stream = 'audio' in stream_types
                 except ffmpeg.Error as probe_error:
                     logger.debug(f"ffprobe 探测文件格式失败: {probe_error}")
                 except Exception as probe_unexpected:
                     logger.debug(f"识别文件格式时出现未知错误: {probe_unexpected}")
 
-                # 若为MP4文件，提取音频
-                if should_extract_audio:
-                    audio_file_path = tempfile.mktemp(suffix=".mp3")
+                if not has_audio_stream:
+                    msg = "音频流不存在"
+                    logger.error(f"{msg}: {temp_file_path}")
+                    return {
+                        "success": False,
+                        "msg": msg
+                    }
+
+                should_convert_to_mp3 = (
+                    has_video_stream
+                    or url_missing_extension
+                    or container_extension != target_extension
+                )
+
+                if content_type and 'video' in content_type.lower():
+                    should_convert_to_mp3 = True
+
+                if should_convert_to_mp3:
+                    audio_file_path = _create_temp_file(target_extension)
                     if not extract_audio(temp_file_path, audio_file_path):
+                        if os.path.exists(audio_file_path):
+                            try:
+                                os.remove(audio_file_path)
+                            except OSError as cleanup_error:
+                                logger.debug(f"清理失败的音频临时文件时出错: {cleanup_error}")
+                        msg = "音频提取失败"
                         return {
                             "success": False,
-                            "msg": "音频提取失败"
+                            "msg": msg
                         }
-                    logger.info(f"音频已从视频中提取并保存到: {audio_file_path}")
+                    logger.info(f"音频已转换为MP3: {audio_file_path}")
                 else:
                     audio_file_path = temp_file_path
 
@@ -299,7 +322,7 @@ async def call_siliconflow_transcription_from_url(media_url, api_key, model_name
                     logger.info(f"临时音频文件已删除: {audio_file_path}")
 
             return {
-                "success": success,
+                "success": False,
                 "msg": msg
             }
 
