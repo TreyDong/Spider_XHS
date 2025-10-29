@@ -690,25 +690,3 @@ class NotionApi:
             return False, f"Notion API 错误: {error_message} (代码: {e.code})", None  # 修改返回值格式
         except Exception as e:
             return False, f"发生未知错误: {e}", None
-
-
-# --- 5. 如何调用此函数的示例 ---
-if __name__ == "__main__":
-    my_notion_token = "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"
-    my_database_id = "20d8a47fcb1e8074948fe9845867a551"
-    notion_api = NotionApi()
-    my_custom_tags = "副业思考经验分享"
-    my_remarks = "这篇笔记提到了放弃副业后的心态变化，对我很有启发。"
-    if my_notion_token != "YOUR_NOTION_TOKEN" and my_database_id != "YOUR_DATABASE_ID":
-        success, message, res = notion_api.save_xiaohongshu_note_to_notion(
-            notion_token=my_notion_token,
-            database_id=my_database_id,
-            cookies_str="abRequestId=9872f025-e0df-5a1a-96d9-c784bd150b62; webBuild=4.63.0; a1=1970cd724bcox347lmqpm1lqd5p2hfjvp0depqg6w50000180463; webId=56fe9f62c3e2e4a78458879062e8f562; acw_tc=0a0bb41417482671179292571e22bd4ec644cb421d68c070661d3c38670f59; gid=yjW8SfWqDDU8yjW8SfWJ48AkDSlCq4W16AU6fKEy1Af2Ud28JxiVhU888yY84Kq8J4iKq84f; web_session=040069b973301279b886ea38013a4b9068c8be; unread={%22ub%22:%2268240d5c000000002100c89a%22%2C%22ue%22:%22682761f600000000120058f0%22%2C%22uc%22:26}; customer-sso-sid=68c517508750238543146546loaq0a7a2abvs9ay; x-user-id-creator.xiaohongshu.com=6807735a000000000a03e8d0; customerClientId=836094898645471; access-token-creator.xiaohongshu.com=customer.creator.AT-68c517508750238542964104sbybdodpqslpn7vy; galaxy_creator_session_id=V8qGqIwGCtgmUfmWwC26uunL9pt3YaH5bqW1; galaxy.creator.beaker.session.id=1748267151196073085102; xsecappid=xhs-pc-web; loadts=1748268715643; websectiga=16f444b9ff5e3d7e258b5f7674489196303a0b160e16647c6c2b4dcb609f4134; sec_poison_id=fc8e8503-1c33-406c-ac04-d94f12b5576b",
-            note_url="33 快乐小狗钱女士发布了一篇小红书笔记，快来看吧！ 😆 VTv5KAZSWVDwqi1 😆 http://xhslink.com/a/wf5NMyBgULveb，复制本条信息，打开【小红书】App查看精彩内容！",
-            custom_tags=my_custom_tags,
-            remarks=my_remarks
-        )
-        if success:
-            print(f"✅ 成功添加到Notion页面，链接为: {res}")
-        else:
-            print("请在 `if __name__ == '__main__':` 代码块中填入你的 Notion Token 和 Database ID。")
